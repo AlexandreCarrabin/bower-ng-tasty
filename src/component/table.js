@@ -20,7 +20,9 @@ angular.module('ngTasty.component.table', [
     'count': 5,
     'page': 1,
     'sortBy': undefined,
-    'sortOrder': undefined
+    'sortOrder': undefined,
+    'rangeSize': 2,
+    'showSectionning': false
   },
   query: {
     'page': 'page',
@@ -30,8 +32,9 @@ angular.module('ngTasty.component.table', [
   },
   bindOnce: true,
   loadOnInit: false,
-  iconUp: 'fa fa-sort-up',
-  iconDown: 'fa fa-sort-down',
+  iconUp: 'glyphicon glyphicon-chevron-up',
+  iconDown: 'glyphicon glyphicon-chevron-down',
+  iconNoSort: 'glyphicon glyphicon-minus',
   bootstrapIcon: false,
   templateHeadUrl: 'template/table/head.html',
   templateUrl: 'template/table/pagination.html',
@@ -107,6 +110,8 @@ angular.module('ngTasty.component.table', [
   $scope.init.page = $scope.init.page || vm.config.init.page;
   $scope.init.sortBy = $scope.init.sortBy || vm.config.init.sortBy;
   $scope.init.sortOrder = $scope.init.sortOrder || vm.config.init.sortOrder;
+  $scope.init.rangeSize = $scope.init.rangeSize || vm.config.init.rangeSize;
+  $scope.init.showSectionning = $scope.init.hasOwnProperty('showSectionning') ? $scope.init.showSectionning : vm.config.init.showSectionning;
   $scope.watchResource = $scope.watchResource || vm.config.watchResource;
 
   // Defualt variables
@@ -489,12 +494,14 @@ angular.module('ngTasty.component.table', [
       scope.bootstrapIcon = tastyTable.config.bootstrapIcon;
       scope.iconUp = tastyTable.config.iconUp;
       scope.iconDown = tastyTable.config.iconDown;
+      scope.iconNoSort = tastyTable.config.iconNoSort;
 
       listScopeToWatch = [
         'bindNotSortBy', 
         'bindBootstrapIcon', 
         'bindIconUp', 
         'bindIconDown',
+        'bindIconNoSort',
         'bindTemplateUrl'
       ];
       listScopeToWatch.forEach(function (scopeName) {
@@ -515,7 +522,7 @@ angular.module('ngTasty.component.table', [
       if (scope.templateUrl) {
         $http.get(scope.templateUrl, { cache: $templateCache })
         .success(function(templateContent) {
-          element.replaceWith($compile(templateContent)(scope));                
+          element.empty().append($compile(templateContent)(scope));
         });
       }
 
@@ -565,6 +572,8 @@ angular.module('ngTasty.component.table', [
             } else {
               isSorted = scope.iconUp;
             }
+          } else {
+            isSorted = scope.iconNoSort;
           }
           scope.columns.push({
             'key': column.key,
@@ -648,7 +657,9 @@ angular.module('ngTasty.component.table', [
       listScopeToWatch = [
         'bindItemsPerPage', 
         'bindListItemsPerPage', 
-        'bindTemplateUrl'
+        'bindTemplateUrl',
+        'bindRangeSize',
+        'bindShowSectionning'
       ];
       listScopeToWatch.forEach(function (scopeName) {
         newScopeName = scopeName.substring(4);
@@ -658,6 +669,8 @@ angular.module('ngTasty.component.table', [
         } else if (attrs[newScopeName]) {
           if (newScopeName === 'itemsPerPage') {
             scope[newScopeName] = parseInt(attrs[newScopeName]);
+          } else if (newScopeName === 'showSectionning') {
+            scope[newScopeName] = attrs[newScopeName] == 'true';
           } else {
             try {
               scope[newScopeName] = JSON.parse(attrs[newScopeName]);
@@ -671,13 +684,16 @@ angular.module('ngTasty.component.table', [
       if (scope.templateUrl) {
         $http.get(scope.templateUrl, { cache: $templateCache })
         .success(function(templateContent) {
-          element.replaceWith($compile(templateContent)(scope));                
+          element.empty().append($compile(templateContent)(scope));
         });
       }
 
       // Default configs
       scope.itemsPerPage = scope.itemsPerPage || tastyTable.config.itemsPerPage;
       scope.listItemsPerPage = scope.listItemsPerPage || tastyTable.config.listItemsPerPage;
+      scope.rangeSize = scope.rangeSize || tastyTable.$scope.init.rangeSize;
+      scope.totalRangeSize = 2 * scope.rangeSize + 1;
+      scope.showSectionning = scope.hasOwnProperty('showSectionning') ? scope.showSectionning : tastyTable.$scope.init.showSectionning;
 
       // Serve side table case
       if (!tastyTable.$scope.clientSide) {
@@ -710,8 +726,8 @@ angular.module('ngTasty.component.table', [
         if (currentPage > scope.pagination.pages) {
           currentPage = scope.pagination.pages;
         }
-        scope.pagMinRange = (currentPage - 2) > 0 ? (currentPage - 2) : 1;
-        scope.pagMaxRange = (currentPage + 2);
+        scope.pagMinRange = (currentPage - scope.rangeSize) > 0 ? (currentPage - scope.rangeSize) : 1;
+        scope.pagMaxRange = (currentPage + scope.rangeSize);
         scope.pagination.page  = currentPage;
         setPaginationRanges();
       };
@@ -721,7 +737,7 @@ angular.module('ngTasty.component.table', [
           return false;
         }
         scope.pagMaxRange = scope.pagMinRange;
-        scope.pagMinRange = scope.pagMaxRange - 5;
+        scope.pagMinRange = scope.pagMaxRange - scope.totalRangeSize;
         setPaginationRanges();
       };
 
@@ -731,19 +747,19 @@ angular.module('ngTasty.component.table', [
           return false;
         }
         scope.pagMinRange = scope.pagMaxRange;
-        scope.pagMaxRange = scope.pagMinRange + 5;
+        scope.pagMaxRange = scope.pagMinRange + scope.totalRangeSize;
         if (scope.pagMaxRange >= scope.pagination.pages) {
           scope.pagMaxRange = scope.pagination.pages + 1;
-          scope.pagMinRange = scope.pagMaxRange - 5 + 1;
+          scope.pagMinRange = scope.pagMaxRange - scope.totalRangeSize + 1;
         }
-        scope.pagMinRange = scope.pagMaxRange - 5;
+        scope.pagMinRange = scope.pagMaxRange - scope.totalRangeSize;
         setPaginationRanges();
       };
 
       setPaginationRanges =  function () {
         scope.listItemsPerPageShow = [];
         scope.pagMinRange = scope.pagMinRange > 0 ? scope.pagMinRange : 1;
-        scope.pagMaxRange = scope.pagMinRange + 5;
+        scope.pagMaxRange = scope.pagMinRange + scope.totalRangeSize;
         if (scope.pagMaxRange > scope.pagination.pages) {
           scope.pagMaxRange = scope.pagination.pages + 1;
         }
